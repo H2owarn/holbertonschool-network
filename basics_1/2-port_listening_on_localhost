@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # This script listens on port 98 on localhost and prints incoming messages
 
 # Ensure we have root privileges
