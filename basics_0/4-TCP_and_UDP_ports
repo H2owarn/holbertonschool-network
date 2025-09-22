@@ -1,15 +1,41 @@
 #!/bin/bash
 
-echo "🔍 Checking for listening ports..."
+echo "Active Internet connections (only servers)"
+echo "Proto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name"
 
-# Check if 'ss' is available (modern and preferred)
-if command -v ss &> /dev/null; then
-    echo "Using 'ss' command:"
-    ss -tuln | grep LISTEN
-elif command -v netstat &> /dev/null; then
-    echo "Using 'netstat' command:"
-    netstat -tuln | grep LISTEN
-else
-    echo "Neither 'ss' nor 'netstat' is available on this system."
-    exit 1
-fi
+# Show TCP and UDP listening sockets with PID/program name
+ss -tulnp | awk '
+BEGIN { }
+NR>1 {
+    proto=$1
+    recvq=$2
+    sendq=$3
+    local=$5
+    foreign=$6
+    state=$7
+    pidprog=$NF
+
+    # Only show LISTEN state or UDP sockets (which don’t have LISTEN)
+    if (state == "LISTEN" || proto ~ /^udp/) {
+        printf "%-5s %-6s %-6s %-22s %-22s %-10s %-s\n", proto, recvq, sendq, local, foreign, state, pidprog
+    }
+}'
+
+echo ""
+echo "Active UNIX domain sockets (only servers)"
+echo "Proto RefCnt Flags       Type       State         I-Node   PID/Program name    Path"
+
+# Show UNIX domain sockets that are listening
+ss -xap | awk '
+/LISTENING/ {
+    proto="unix"
+    refcnt=$2
+    flags=$3
+    type=$4
+    state=$5
+    inode=$6
+    pidprog=$7
+    path=$NF
+
+    printf "%-5s %-6s %-12s %-10s %-12s %-8s %-20s %-s\n", proto, refcnt, flags, type, state, inode, pidprog, path
+}'
