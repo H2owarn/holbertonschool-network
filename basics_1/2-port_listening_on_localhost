@@ -1,0 +1,11 @@
+#!/bin/bash
+# This script listens on port 98 on localhost and prints incoming messages
+
+# Ensure we have root privileges
+if [ "$EUID" -ne 0 ]; then
+  echo "Please run as root: sudo ./2-port_listening_on_localhost"
+  exit 1
+fi
+
+# Use nc (netcat) to listen on 127.0.0.2:98
+nc -lv 127.0.0.2 98
