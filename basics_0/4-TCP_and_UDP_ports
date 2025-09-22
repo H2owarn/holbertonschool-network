@@ -1,0 +1,16 @@
+#!/bin/bash
+
+
+
+# Check if 'ss' is available
+if command -v ss &> /dev/null; then
+    ss -tulnp | awk '
+    BEGIN { print "Proto\tLocal Address\t\tPID/Program" }
+    /LISTEN/ {
+        split($NF, proc, "=")
+        printf "%s\t%-20s\t%s\n", $1, $5, proc[2]
+    }'
+else
+    echo "❌ 'ss' command not found. Please install 'iproute2' package."
+    exit 1
+fi
