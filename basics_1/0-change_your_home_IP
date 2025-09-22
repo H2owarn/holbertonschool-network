@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# This script updates /etc/hosts to remap localhost and facebook.com
 
 HOSTS_FILE="/etc/hosts"
 BACKUP_FILE="/etc/hosts.bak"
