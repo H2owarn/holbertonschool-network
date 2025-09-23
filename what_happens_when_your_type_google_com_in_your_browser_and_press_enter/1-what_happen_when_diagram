@@ -1,0 +1,51 @@
+flowchart LR
+  %% Top-level swimlanes
+  subgraph Client["Client"]
+    U[Browser]
+  end
+
+  subgraph Network["Network / Internet"]
+    DNS[(Recursive DNS<br/>(DoH/UDP/TCP))]
+    FW[Firewall / Security Gateway]
+  end
+
+  subgraph Edge["Provider Edge"]
+    LB[Load Balancer]
+  end
+
+  subgraph Backend["Backend"]
+    W1[Web Server (Nginx/Apache)]
+    AS[Application Server (app runtime)]
+  end
+
+  subgraph Data["Data Layer"]
+    DB[(Database)]
+  end
+
+  %% 1) DNS resolution
+  U -- "1) DNS query: www.google.com" --> DNS
+  DNS -- "A/AAAA records → Server IP(s)" --> U
+
+  %% 2) Encrypted connection to server IP on correct port
+  U -- "2) TCP SYN → IP:443<br/>🔒 HTTPS (TLS 1.2/1.3)" --> FW
+
+  %% 3) Firewall hop
+  FW -- "Allow outbound 443 / inbound 443 (policy match)" --> LB
+
+  %% 4) Load balancer distributes
+  LB -- "Health check & routing<br/>distribute request" --> W1
+  %% (Optional extra web nodes, uncomment to show distribution fanout)
+  %% LB -.-> W2[Web Server #2]
+
+  %% 5) Web server answers static or proxies dynamic
+  W1 -- "Static? serve file<br/>Dynamic? reverse proxy" --> AS
+
+  %% 6) App server generates the page
+  AS -- "SQL over TCP 3306" --> DB
+  DB -- "Rows / documents" --> AS
+  AS -- "HTML / JSON response" --> W1
+
+  %% 7) Response returns encrypted to client
+  W1 --> LB
+  LB -- "🔒 HTTPS response (TLS) over 443" --> FW
+  FW --> U

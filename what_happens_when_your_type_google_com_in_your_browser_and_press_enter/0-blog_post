@@ -1,0 +1,205 @@
+What Happens When You Type https://www.google.com and Press Enter
+
+1) URL Parse & Preflight
+
+    You press Enter on https://www.google.com.
+
+    The browser determines:
+
+        Scheme: https → encrypted connection over TLS (port 443 by default)
+
+        Host: www.google.com
+
+        Path/Query: defaults to / unless otherwise specified
+
+    The browser checks:
+
+        HSTS rules (force HTTPS?)
+
+        Cache/Service Worker (can we serve locally?)
+
+        DNS cache (do we already know the IP?)
+
+    If nothing local satisfies the request, it proceeds to a network lookup.
+
+2) DNS Request
+
+    1. Goal: Convert www.google.com → an IP address.
+
+    2. Browser asks the OS for the IP.
+
+    3. If not cached, the OS queries a recursive resolver (your ISP, enterprise, or a public resolver).
+
+    4. The resolver walks the DNS hierarchy:
+
+        Root → .com TLD → Authoritative name servers for google.com
+
+    5. The authoritative servers return an A (IPv4) and/or AAAA (IPv6) record(s).
+
+    6. You now have one or more IPs to connect to (often anycast addresses that route to a nearby edge).
+
+        Sometimes the browser uses DNS-over-HTTPS (DoH) to encrypt the DNS query.
+
+3) TCP/IP (and QUIC)
+
+Goal: Build a transport connection to the server IP.
+
+        Traditional flow (HTTP/1.1 or HTTP/2):
+
+            IP routing: Packets hop through routers (your LAN → ISP → internet → Google’s network).
+
+            TCP 3-way handshake: SYN → SYN-ACK → ACK to establish a reliable stream.
+
+        Modern flow (HTTP/3):
+
+            Uses QUIC over UDP (no TCP handshake), with TLS built in.
+
+            Faster handshakes and better performance on lossy networks.
+
+Either way, the connection is ultimately encapsulated by IP, which handles addressing and routing.
+
+4) Firewalls in the Path
+
+    Goal: Only allow intended traffic.
+
+        Host firewall (your computer) must allow outbound 443.
+
+        Network firewalls/NAT (home router, corporate gateway) pass the connection if it matches rules.
+
+        Cloud security filters (at Google’s edge) allow inbound 443, drop the rest.
+
+        Firewalls inspect headers, states, and sometimes limited payload (L7 firewalls) to enforce policy.
+
+5) HTTPS / SSL (TLS)
+
+    Goal: Encrypt, authenticate, and ensure integrity.
+
+        1. TLS handshake negotiates protocol versions and ciphers (and via ALPN, the HTTP protocol: h1, h2, or h3).
+
+        2. Server presents an X.509 certificate for www.google.com.
+
+        3. Your browser verifies:
+
+            Issuer is a trusted Certificate Authority (CA)
+
+            Certificate matches the hostname
+
+            Certificate isn’t expired or revoked
+
+        4. A secure session key is established; all subsequent HTTP bytes are encrypted.
+
+        Result: eavesdroppers can’t read or tamper with your data.
+
+6) Load Balancer
+
+    Goal: Distribute traffic and keep things fast & available.
+
+        Your connection typically lands on a global / edge load balancer:
+
+            Can be L4 (TCP/UDP) or L7 (HTTP)
+
+            Performs health checks and routes you to a healthy backend, often the closest region
+
+            May terminate TLS (then re-encrypt to the backend) and apply WAF/rate limiting
+
+        Load balancers are key for scale, reliability, and zero-downtime maintenance.
+
+7) Web Server
+
+    Goal: Speak HTTP efficiently and serve static content.
+
+        Commonly Nginx, Envoy, or Apache:
+
+            Handles keep-alive, compression, caching, HTTP/2 server push (when used), etc.
+
+            Serves static assets (HTML, CSS, JS, images) from disk or a CDN edge cache.
+
+            Reverse-proxies dynamic requests to the application layer.
+
+    In many big deployments, static assets are already at a nearby CDN node, skipping deeper layers entirely.
+
+8) Application Server
+
+    Goal: Run your application code for dynamic requests.
+
+        Examples: Gunicorn/uWSGI (Python), Node.js/PM2, Java app servers, Go services, etc.
+
+        Responsibilities:
+
+            Authentication, personalization
+
+            Running search queries / business logic
+
+            Aggregating data from microservices and caches (e.g., Memcached, Redis)
+
+    The app server returns a response (JSON/HTML) to the web server.
+
+9) Database
+
+    Goal: Persist and query data.
+
+        The application server talks to one or more databases (e.g., Spanner, Bigtable, MySQL, Postgres) and indexes (e.g., search indices).
+
+        Reads are often accelerated by caches and replicas.
+
+        Writes go to a primary (or consensus cluster) with durability guarantees.
+
+    Data flows back: DB → App → Web → Load Balancer → You.
+
+10) The Return Trip & Render
+
+    The encrypted response packets retrace the route to your browser.
+
+    Your browser:
+
+        Decrypts bytes, parses HTML
+
+        Fetches additional resources (CSS/JS/fonts/images — often in parallel)
+
+        Executes JS, builds the DOM, paints pixels
+
+    And voilà — Google’s homepage appears.
+
+11) One-Page Diagram
+You
+│   URL: https://www.google.com
+▼
+Browser ──(Check caches/HSTS/Service Worker)──────────────────────────────────────────┐
+│                                                                                    │
+│ DNS Lookup (DoH or UDP/TCP): www.google.com → IP(s)                                │
+▼                                                                                    │
+TCP/IP (or QUIC): connect to IP:443                                                  │
+│                                                                                    │
+Firewalls/NAT: local → ISP → Internet → Google Edge                                  │
+▼                                                                                    │
+TLS Handshake (HTTPS): validate cert, negotiate ALPN (h1/h2/h3)                      │
+│                                                                                    │
+Load Balancer (global/edge): choose healthy/nearby backend, optional TLS re-encrypt  │
+▼                                                                                    │
+Web Server (Nginx/Envoy/Apache/CDN): serve static, reverse-proxy dynamic             │
+▼                                                                                    │
+Application Server (business logic, microservices, caching)                          │
+▼                                                                                    │
+Database(s) (reads/writes, replicas, indexes, caches)                                │
+│                                                                                    │
+Response bubbles back along the chain (encrypted)                                    │
+▼                                                                                    │
+Browser renders the page                                                             │
+
+12) Glossary
+
+    DNS: Phone book of the internet; maps names to IPs.
+
+    TCP/IP: Transport + network protocols that deliver bytes across the internet.
+
+    Firewall: Gatekeeper that permits/blocks traffic by rules.
+
+    HTTPS/TLS: Encryption + authentication for HTTP.
+
+    Load Balancer: Traffic distributor and availability guard.
+
+    Web Server: HTTP specialist; serves static and proxies dynamic.
+
+    Application Server: Runs your code to produce dynamic responses.
+
+    Database: Stores and retrieves persistent data.
